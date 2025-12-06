@@ -7,11 +7,9 @@ import * as THREE from 'three';
 const evaluateFunction = (expression, x) => {
   try {
     if (!expression || !expression.trim()) return NaN;
-    // 허용 문자: 숫자, x, 연산자, 괄호, 공백, 삼각함수 등
     if (/[^x0-9+\-*/().^ \t\r\nsincostanlogexpsqrtPIe]/.test(expression)) return NaN;
 
     let jsExp = expression.toLowerCase();
-    // 암묵적 곱셈 처리 (2x -> 2*x)
     jsExp = jsExp.replace(/(\d)\s*([a-z(])/g, '$1*$2');
     jsExp = jsExp.replace(/([x])\s*([0-9(])/g, '$1*$2');
     jsExp = jsExp.replace(/(\))\s*([0-9a-z(])/g, '$1*$2');
@@ -35,12 +33,135 @@ const evaluateFunction = (expression, x) => {
 };
 
 // -----------------------------------------------------------------------------
+// [NEW] 튜토리얼 카드 컴포넌트 (플로팅 형태)
+// -----------------------------------------------------------------------------
+const TutorialCard = ({ isOpen, onClose }) => {
+  const [step, setStep] = useState(0);
+
+  // 닫힐 때 스텝 초기화
+  useEffect(() => {
+    if (!isOpen) setStep(0);
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const tutorials = [
+    {
+      title: "복소함수 시각화 🚀",
+      content: (
+        <div className="space-y-2">
+          <p className="text-sm">
+            <strong>f(x) = g(x) + q(x)i</strong> 꼴의 복소함수를 3차원 공간에서 이해해보세요.
+          </p>
+          <div className="text-xs bg-blue-50 p-2 rounded text-blue-700">
+            * 실수부(g)와 허수부(q)가 합쳐져 입체적인 그래프가 됩니다.
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "3차원 좌표계 이해 📐",
+      content: (
+        <div className="space-y-2 text-sm">
+          <ul className="list-disc list-inside space-y-1">
+            <li><span className="font-bold">x축:</span> 입력값 (검정)</li>
+            <li><span className="font-bold text-blue-600">z축(바닥):</span> 실수값 g(x)</li>
+            <li><span className="font-bold text-red-600">y축(높이):</span> 허수값 q(x)</li>
+          </ul>
+          <p className="text-xs text-gray-500 mt-1">2D 뷰에서는 실수값(파랑)만 보입니다.</p>
+        </div>
+      )
+    },
+    {
+      title: "그래프 조작법 🎮",
+      content: (
+        <div className="space-y-2 text-sm">
+          <p>마우스를 이용해 자유롭게 관찰하세요.</p>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-gray-100 p-1 rounded text-center">🖱️ 드래그<br/>회전</div>
+            <div className="bg-gray-100 p-1 rounded text-center">🖱️ 우클릭<br/>이동</div>
+            <div className="bg-gray-100 p-1 rounded text-center">🔍 휠<br/>확대/축소</div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "값 대입 & 관찰 👇",
+      content: (
+        <div className="space-y-2 text-sm">
+          <p>오른쪽 아래 <strong>노란색 패널</strong>을 보세요.</p>
+          <p>슬라이더를 움직여 특정 <strong>x값</strong>에서의 위치와 계산 결과를 실시간으로 확인할 수 있습니다.</p>
+          <div className="text-xs text-gray-400 mt-1">
+            * 그래프 위의 노란 점을 찾아보세요!
+          </div>
+        </div>
+      )
+    }
+  ];
+
+  const handleNext = () => {
+    if (step < tutorials.length - 1) setStep(step + 1);
+    else onClose();
+  };
+
+  const handlePrev = () => {
+    if (step > 0) setStep(step - 1);
+  };
+
+  return (
+    // 우측 상단 플로팅 카드 스타일
+    <div className="absolute top-4 right-4 z-30 w-72 bg-white/95 backdrop-blur border border-gray-200 shadow-xl rounded-lg overflow-hidden transition-all duration-300 animate-fade-in-down">
+      {/* 헤더 */}
+      <div className="bg-gradient-to-r from-gray-100 to-gray-200 px-4 py-3 flex justify-between items-center border-b border-gray-300">
+        <h3 className="font-bold text-gray-700 text-sm flex items-center gap-2">
+          <span className="bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">{step + 1}</span>
+          {tutorials[step].title}
+        </h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-lg leading-none">&times;</button>
+      </div>
+
+      {/* 내용 */}
+      <div className="p-4 min-h-[100px] text-gray-600">
+        {tutorials[step].content}
+      </div>
+
+      {/* 네비게이션 */}
+      <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+        <div className="flex gap-1">
+          {tutorials.map((_, idx) => (
+            <div 
+              key={idx}
+              className={`w-1.5 h-1.5 rounded-full transition-colors ${idx === step ? 'bg-blue-500' : 'bg-gray-300'}`}
+            />
+          ))}
+        </div>
+        <div className="flex gap-2">
+          {step > 0 && (
+            <button 
+              onClick={handlePrev}
+              className="text-xs px-3 py-1.5 rounded bg-white border border-gray-300 hover:bg-gray-100 text-gray-600 transition-colors"
+            >
+              이전
+            </button>
+          )}
+          <button 
+            onClick={handleNext}
+            className="text-xs px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-colors"
+          >
+            {step === tutorials.length - 1 ? '시작하기' : '다음'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// -----------------------------------------------------------------------------
 // 통합 Three.js 캔버스 컴포넌트
 // -----------------------------------------------------------------------------
 const ThreeCanvas = ({ gExp, qExp, is3DMode, evalX }) => {
   const mountRef = useRef(null);
   
-  // Three.js 객체들을 유지하기 위한 Ref
   const sceneRefs = useRef({
     scene: null,
     camera: null,
@@ -73,7 +194,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode, evalX }) => {
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
     camera.position.set(0, 0, 25);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); // 스크린샷을 위해 buffer preserve
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mountRef.current.appendChild(renderer.domElement);
@@ -385,13 +506,13 @@ export default function App() {
   const [is3D, setIs3D] = useState(false);
   const [evalX, setEvalX] = useState('2');
   const [evalResult, setEvalResult] = useState({ r: 0, i: 0, valid: false });
+  const [showTutorial, setShowTutorial] = useState(true);
 
-  // [NEW] 예제 프리셋 정의
   const presets = [
     { name: '기본 2차함수', g: 'x^2 - 2x + 1', q: '' },
     { name: '오일러 나선', g: 'cos(x)', q: 'sin(x)' },
     { name: '감쇠 진동', g: 'exp(-0.2x)cos(3x)', q: 'exp(-0.2x)sin(3x)' },
-    { name: '복소 지수함수', g: 'exp(x)', q: '0' }, // z축 회전 시 흥미로움
+    { name: '복소 지수함수', g: 'exp(x)', q: '0' },
   ];
 
   const applyPreset = (preset) => {
@@ -435,13 +556,20 @@ export default function App() {
       {/* 헤더 */}
       <div className="bg-white p-4 md:p-6 shadow-md z-10 relative flex-shrink-0">
         <div className="flex justify-between items-start">
-            <div>
+            <div className="flex items-center gap-3">
                 <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">
                 복소수 함수 시각화: <span className="font-mono text-purple-600 block md:inline mt-1 md:mt-0">f(x) = g(x) + q(x)i</span>
                 </h1>
+                {/* 튜토리얼 다시 열기 버튼 */}
+                <button 
+                  onClick={() => setShowTutorial(true)}
+                  className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 text-sm font-bold flex items-center justify-center hover:bg-blue-100 hover:text-blue-600 transition-colors mb-2"
+                  title="튜토리얼 보기"
+                >
+                  ?
+                </button>
             </div>
             
-            {/* [NEW] 프리셋 버튼 그룹 (PC 전용, 모바일은 공간 부족시 숨김) */}
             <div className="hidden md:flex gap-2">
                 {presets.map((p, idx) => (
                     <button 
@@ -455,9 +583,7 @@ export default function App() {
             </div>
         </div>
         
-        {/* 입력 컨트롤 */}
         <div className="flex flex-col md:flex-row gap-3 md:gap-6 items-start md:items-end mb-1 mt-2">
-          
           <div className="flex flex-col w-full md:w-auto">
             <label className="text-sm font-semibold text-blue-600 mb-1 flex items-center justify-between">
               <span>Step 1: 실수부 g(x)</span>
@@ -505,7 +631,6 @@ export default function App() {
           </div>
         </div>
         
-        {/* [NEW] 모바일용 프리셋 (셀렉트 박스) */}
         <div className="md:hidden mt-3">
             <select 
                 onChange={(e) => {
@@ -523,11 +648,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* 캔버스 영역 */}
       <div className="flex-1 relative bg-gradient-to-b from-gray-100 to-gray-200 overflow-hidden">
+        {/* 튜토리얼 카드 (이제 캔버스 내부, 우측 상단에 위치) */}
+        <TutorialCard isOpen={showTutorial} onClose={() => setShowTutorial(false)} />
+
         <ThreeCanvas gExp={gInput} qExp={qInput} is3DMode={is3D} evalX={evalX} />
         
-        {/* 범례 (왼쪽 아래) */}
         <div className="absolute bottom-4 left-4 right-4 md:right-auto md:w-auto bg-white/90 backdrop-blur p-3 rounded-lg shadow-lg pointer-events-none select-none text-xs md:text-sm border border-gray-100 z-10">
           <ul className="space-y-1">
             <li className="flex items-center gap-2">
@@ -545,7 +671,6 @@ export default function App() {
           </ul>
         </div>
 
-        {/* --- 값 대입 패널 (오른쪽 아래) --- */}
         <div className="absolute bottom-24 left-4 right-4 md:bottom-4 md:left-auto md:right-4 md:w-auto z-20">
             <div className="bg-yellow-50/90 backdrop-blur border border-yellow-200 shadow-lg rounded-md p-3 flex flex-col md:flex-row items-center gap-4">
                 <div className="flex items-center gap-2 w-full md:w-auto">
