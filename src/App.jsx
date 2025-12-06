@@ -7,9 +7,11 @@ import * as THREE from 'three';
 const evaluateFunction = (expression, x) => {
   try {
     if (!expression || !expression.trim()) return NaN;
+    // 허용 문자: 숫자, x, 연산자, 괄호, 공백, 삼각함수 등
     if (/[^x0-9+\-*/().^ \t\r\nsincostanlogexpsqrtPIe]/.test(expression)) return NaN;
 
     let jsExp = expression.toLowerCase();
+    // 암묵적 곱셈 처리 (2x -> 2*x)
     jsExp = jsExp.replace(/(\d)\s*([a-z(])/g, '$1*$2');
     jsExp = jsExp.replace(/([x])\s*([0-9(])/g, '$1*$2');
     jsExp = jsExp.replace(/(\))\s*([0-9a-z(])/g, '$1*$2');
@@ -38,6 +40,7 @@ const evaluateFunction = (expression, x) => {
 const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
   const mountRef = useRef(null);
   
+  // Three.js 객체들을 유지하기 위한 Ref
   const sceneRefs = useRef({
     scene: null,
     camera: null,
@@ -47,18 +50,21 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     gridHelper: null,
     axes: { x: null, real: null, imag: null },
     animationId: null,
-    updateGraph: null,
+    updateGraph: null, // 그래프 업데이트 함수 저장소
   });
 
+  // 애니메이션 상태
   const animState = useRef({
-    currentT: 0, 
+    currentT: 0, // 0(2D) ~ 1(3D)
     targetT: 0,
     time: 0,
   });
 
+  // 1. 초기화 및 애니메이션 루프
   useEffect(() => {
     if (!mountRef.current) return;
 
+    // --- Scene Setup ---
     const width = mountRef.current.clientWidth;
     const height = mountRef.current.clientHeight;
 
@@ -73,15 +79,18 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mountRef.current.appendChild(renderer.domElement);
 
+    // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const pointLight = new THREE.PointLight(0xffffff, 0.8);
     pointLight.position.set(10, 10, 10);
     scene.add(pointLight);
 
+    // Grid
     const gridHelper = new THREE.GridHelper(30, 30, 0xdddddd, 0xeeeeee);
     gridHelper.rotation.x = Math.PI / 2;
     scene.add(gridHelper);
 
+    // Main Line
     const maxPoints = 2000;
     const lineGeo = new THREE.BufferGeometry();
     const positions = new Float32Array(maxPoints * 3);
@@ -91,6 +100,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     lineGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 100);
     scene.add(mainLine);
 
+    // Spheres Pool
     const sphereGeo = new THREE.SphereGeometry(0.15, 8, 8);
     const sphereMat = new THREE.MeshStandardMaterial({ color: 0x10b981 });
     const spheres = [];
@@ -101,6 +111,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       spheres.push(mesh);
     }
 
+    // Axes
     const createAxis = (color) => {
       const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
       const mat = new THREE.LineBasicMaterial({ color });
@@ -119,26 +130,31 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       scene, camera, renderer, mainLine, spheres, gridHelper, axes, animationId: null, updateGraph: null
     };
 
+    // Controls Vars
     let isDragging = false;
     let prevMouse = { x: 0, y: 0 };
     const canvas = renderer.domElement;
 
+    // --- Animation Loop ---
     const animate = () => {
       sceneRefs.current.animationId = requestAnimationFrame(animate);
 
       const state = animState.current;
       const refs = sceneRefs.current;
       
+      // 1. Animation Logic
       state.currentT += (state.targetT - state.currentT) * 0.1;
       if (Math.abs(state.targetT - state.currentT) < 0.001) state.currentT = state.targetT;
       const t = state.currentT;
 
+      // 2. Call Graph Update
       if (refs.updateGraph) {
         refs.updateGraph();
       }
 
+      // 3. Camera Update
       const startPos = new THREE.Vector3(0, 0, 25);
-      const endPos = new THREE.Vector3(10.14, 20.48, 10.14);
+      const endPos = new THREE.Vector3(10.14, 20.48, 10.14); // 55도
       const targetPos = new THREE.Vector3().lerpVectors(startPos, endPos, t);
       
       if (!isDragging && Math.abs(state.targetT - state.currentT) > 0.01) {
@@ -146,10 +162,12 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
         refs.camera.lookAt(0, 0, 0);
       }
 
+      // 4. Grid Update
       refs.gridHelper.rotation.x = THREE.MathUtils.lerp(Math.PI / 2, 0, t);
       state.time += 0.02;
       refs.gridHelper.position.y = Math.sin(state.time) * 0.05;
 
+      // 5. Update Axes
       const range = 15;
       const xGeo = refs.axes.x.geometry;
       xGeo.setFromPoints([new THREE.Vector3(-range, 0, 0), new THREE.Vector3(range, 0, 0)]);
@@ -166,10 +184,12 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
         new THREE.Vector3(0, range * t, 0)
       ]);
 
+      // 6. Render
       refs.renderer.render(refs.scene, refs.camera);
     };
     animate();
 
+    // Event Listeners
     const handleResize = () => {
       if (!mountRef.current) return;
       const w = mountRef.current.clientWidth;
@@ -180,8 +200,9 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     };
     window.addEventListener('resize', handleResize);
 
+    // [FIX] 포인터 이벤트 핸들러 강화
     const onPointerDown = (e) => { 
-      e.preventDefault(); 
+      e.preventDefault(); // 기본 드래그/선택 방지
       isDragging = true; 
       prevMouse = { x: e.clientX, y: e.clientY }; 
     };
@@ -190,7 +211,11 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     
     const onPointerMove = (e) => {
       if (!isDragging) return;
-      if (Math.abs(state.targetT - state.currentT) > 0.1) return;
+      
+      // [FIX] 여기서 'state' 변수가 정의되지 않아 오류가 발생했었습니다.
+      // animState.current로 직접 접근하여 해결합니다.
+      const currentAnimState = animState.current;
+      if (Math.abs(currentAnimState.targetT - currentAnimState.currentT) > 0.1) return;
 
       const deltaX = e.clientX - prevMouse.x;
       const deltaY = e.clientY - prevMouse.y;
@@ -200,6 +225,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       const spherical = new THREE.Spherical().setFromVector3(offset);
       spherical.theta -= deltaX * 0.005;
       spherical.phi -= deltaY * 0.005;
+      // 짐벌락 방지 및 회전 범위 제한
       spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
       
       offset.setFromSpherical(spherical);
@@ -239,12 +265,14 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     };
   }, []);
 
+  // 2. 입력 및 모드 변경 감지
   useEffect(() => {
     const refs = sceneRefs.current;
     if (!refs.mainLine) return;
 
     animState.current.targetT = is3DMode ? 1 : 0;
 
+    // 그래프 포인트 미리 계산
     const points = [];
     const range = 10;
     const step = 0.1;
@@ -263,10 +291,12 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       points.push({ x, real, imag });
     }
 
+    // 매 프레임 호출될 업데이트 함수 정의
     const updateGeometry = () => {
       const positions = refs.mainLine.geometry.attributes.position.array;
-      const t = animState.current.currentT;
+      const t = animState.current.currentT; // 현재 애니메이션 진행도 사용
 
+      // 색상 업데이트
       const color2D = new THREE.Color(0x10b981);
       const color3D = new THREE.Color(0x8b5cf6);
       const curColor = color2D.lerp(color3D, t);
@@ -276,7 +306,9 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       let ptIndex = 0;
       points.forEach((pt, i) => {
         const x = pt.x;
+        // y: real -> imag 로 변환
         const y = (1 - t) * pt.real + t * pt.imag;
+        // z: 0 -> real 로 변환 (실수축이 바닥으로 누움)
         const z = (1 - t) * 0 + t * pt.real;
 
         positions[ptIndex++] = x;
@@ -302,7 +334,10 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       }
     };
 
+    // 업데이트 함수 등록 (animate 루프에서 호출됨)
     sceneRefs.current.updateGraph = updateGeometry;
+    
+    // 초기화용 1회 실행
     updateGeometry();
 
   }, [gExp, qExp, is3DMode]);
