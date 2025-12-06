@@ -7,9 +7,11 @@ import * as THREE from 'three';
 const evaluateFunction = (expression, x) => {
   try {
     if (!expression || !expression.trim()) return NaN;
+    // 허용 문자: 숫자, x, 연산자, 괄호, 공백, 삼각함수 등
     if (/[^x0-9+\-*/().^ \t\r\nsincostanlogexpsqrtPIe]/.test(expression)) return NaN;
 
     let jsExp = expression.toLowerCase();
+    // 암묵적 곱셈 처리 (2x -> 2*x)
     jsExp = jsExp.replace(/(\d)\s*([a-z(])/g, '$1*$2');
     jsExp = jsExp.replace(/([x])\s*([0-9(])/g, '$1*$2');
     jsExp = jsExp.replace(/(\))\s*([0-9a-z(])/g, '$1*$2');
@@ -38,6 +40,7 @@ const evaluateFunction = (expression, x) => {
 const ThreeCanvas = ({ gExp, qExp, is3DMode, evalX }) => {
   const mountRef = useRef(null);
   
+  // Three.js 객체들을 유지하기 위한 Ref
   const sceneRefs = useRef({
     scene: null,
     camera: null,
@@ -70,7 +73,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode, evalX }) => {
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
     camera.position.set(0, 0, 25);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); // 스크린샷을 위해 buffer preserve
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mountRef.current.appendChild(renderer.domElement);
@@ -383,6 +386,20 @@ export default function App() {
   const [evalX, setEvalX] = useState('2');
   const [evalResult, setEvalResult] = useState({ r: 0, i: 0, valid: false });
 
+  // [NEW] 예제 프리셋 정의
+  const presets = [
+    { name: '기본 2차함수', g: 'x^2 - 2x + 1', q: '' },
+    { name: '오일러 나선', g: 'cos(x)', q: 'sin(x)' },
+    { name: '감쇠 진동', g: 'exp(-0.2x)cos(3x)', q: 'exp(-0.2x)sin(3x)' },
+    { name: '복소 지수함수', g: 'exp(x)', q: '0' }, // z축 회전 시 흥미로움
+  ];
+
+  const applyPreset = (preset) => {
+    setGInput(preset.g);
+    setQInput(preset.q);
+    if(preset.q !== '') setIs3D(true);
+  };
+
   useEffect(() => {
     if (qInput.trim() !== '' && !is3D) {
       setIs3D(true);
@@ -417,12 +434,29 @@ export default function App() {
     <div className="flex flex-col h-screen w-full bg-gray-50 font-sans overflow-hidden">
       {/* 헤더 */}
       <div className="bg-white p-4 md:p-6 shadow-md z-10 relative flex-shrink-0">
-        <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">
-          복소수 함수 시각화: <span className="font-mono text-purple-600 block md:inline mt-1 md:mt-0">f(x) = g(x) + q(x)i</span>
-        </h1>
+        <div className="flex justify-between items-start">
+            <div>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">
+                복소수 함수 시각화: <span className="font-mono text-purple-600 block md:inline mt-1 md:mt-0">f(x) = g(x) + q(x)i</span>
+                </h1>
+            </div>
+            
+            {/* [NEW] 프리셋 버튼 그룹 (PC 전용, 모바일은 공간 부족시 숨김) */}
+            <div className="hidden md:flex gap-2">
+                {presets.map((p, idx) => (
+                    <button 
+                        key={idx}
+                        onClick={() => applyPreset(p)}
+                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1 rounded transition-colors"
+                    >
+                        {p.name}
+                    </button>
+                ))}
+            </div>
+        </div>
         
         {/* 입력 컨트롤 */}
-        <div className="flex flex-col md:flex-row gap-3 md:gap-6 items-start md:items-end mb-1">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-6 items-start md:items-end mb-1 mt-2">
           
           <div className="flex flex-col w-full md:w-auto">
             <label className="text-sm font-semibold text-blue-600 mb-1 flex items-center justify-between">
@@ -470,6 +504,23 @@ export default function App() {
              </button>
           </div>
         </div>
+        
+        {/* [NEW] 모바일용 프리셋 (셀렉트 박스) */}
+        <div className="md:hidden mt-3">
+            <select 
+                onChange={(e) => {
+                    const preset = presets.find(p => p.name === e.target.value);
+                    if(preset) applyPreset(preset);
+                }}
+                className="w-full border p-2 rounded text-sm bg-gray-50 text-gray-600"
+                defaultValue=""
+            >
+                <option value="" disabled>✨ 예제 함수 선택하기</option>
+                {presets.map((p, idx) => (
+                    <option key={idx} value={p.name}>{p.name}</option>
+                ))}
+            </select>
+        </div>
       </div>
 
       {/* 캔버스 영역 */}
@@ -494,7 +545,7 @@ export default function App() {
           </ul>
         </div>
 
-        {/* --- [이동] 값 대입 패널 (오른쪽 아래) --- */}
+        {/* --- 값 대입 패널 (오른쪽 아래) --- */}
         <div className="absolute bottom-24 left-4 right-4 md:bottom-4 md:left-auto md:right-4 md:w-auto z-20">
             <div className="bg-yellow-50/90 backdrop-blur border border-yellow-200 shadow-lg rounded-md p-3 flex flex-col md:flex-row items-center gap-4">
                 <div className="flex items-center gap-2 w-full md:w-auto">
@@ -503,7 +554,7 @@ export default function App() {
                         type="number" 
                         value={evalX}
                         onChange={(e) => setEvalX(e.target.value)}
-                        className="border border-yellow-300 p-1 w-20 rounded text-center font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white"
+                        className="border border-yellow-300 p-1 w-24 rounded text-center font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white"
                     />
                     <input 
                         type="range" 
@@ -514,9 +565,9 @@ export default function App() {
                     />
                 </div>
                 
-                <div className="flex-1 text-center md:text-left">
+                <div className="flex-1 text-center md:text-left min-w-[280px]">
                     {evalResult.valid ? (
-                        <div className="text-sm font-mono bg-white/80 px-3 py-1 rounded border border-yellow-200 inline-block shadow-sm">
+                        <div className="text-sm font-mono bg-white/80 px-3 py-1 rounded border border-yellow-200 block shadow-sm w-full text-center">
                             <span className="text-gray-600">f({evalX}) = </span>
                             <span className="text-blue-600 font-bold">{parseFloat(evalResult.r.toFixed(3))}</span>
                             <span className="text-gray-400 mx-1">+</span>
