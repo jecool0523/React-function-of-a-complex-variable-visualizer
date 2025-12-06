@@ -147,7 +147,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       if (Math.abs(state.targetT - state.currentT) < 0.001) state.currentT = state.targetT;
       const t = state.currentT;
 
-      // 2. Call Graph Update (이 부분이 빠져있었습니다!)
+      // 2. Call Graph Update
       if (refs.updateGraph) {
         refs.updateGraph();
       }
@@ -157,6 +157,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       const endPos = new THREE.Vector3(10.14, 20.48, 10.14); // 55도
       const targetPos = new THREE.Vector3().lerpVectors(startPos, endPos, t);
       
+      // 드래그 중이 아니고, 애니메이션이 진행 중일 때만 카메라 자동 이동
       if (!isDragging && Math.abs(state.targetT - state.currentT) > 0.01) {
         refs.camera.position.copy(targetPos);
         refs.camera.lookAt(0, 0, 0);
@@ -200,8 +201,15 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     };
     window.addEventListener('resize', handleResize);
 
-    const onPointerDown = (e) => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; };
+    // [FIX] 포인터 이벤트 핸들러 강화
+    const onPointerDown = (e) => { 
+      e.preventDefault(); // 기본 드래그/선택 방지
+      isDragging = true; 
+      prevMouse = { x: e.clientX, y: e.clientY }; 
+    };
+    
     const onPointerUp = () => { isDragging = false; };
+    
     const onPointerMove = (e) => {
       if (!isDragging) return;
       if (Math.abs(state.targetT - state.currentT) > 0.1) return;
@@ -214,11 +222,14 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       const spherical = new THREE.Spherical().setFromVector3(offset);
       spherical.theta -= deltaX * 0.005;
       spherical.phi -= deltaY * 0.005;
+      // 짐벌락 방지 및 회전 범위 제한
       spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+      
       offset.setFromSpherical(spherical);
       camera.position.copy(offset);
       camera.lookAt(0, 0, 0);
     };
+    
     const onWheel = (e) => {
       e.preventDefault();
       const offset = new THREE.Vector3().copy(camera.position);
@@ -328,7 +339,14 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
 
   }, [gExp, qExp, is3DMode]);
 
-  return <div ref={mountRef} className="w-full h-full" />;
+  // [FIX] 터치/스크롤 간섭 방지 및 커서 스타일 적용
+  return (
+    <div 
+      ref={mountRef} 
+      className="w-full h-full cursor-move select-none" 
+      style={{ touchAction: 'none' }} // 브라우저 기본 터치 동작 무효화 (필수)
+    />
+  );
 };
 
 // -----------------------------------------------------------------------------
