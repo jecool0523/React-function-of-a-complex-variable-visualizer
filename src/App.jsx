@@ -50,16 +50,17 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     gridHelper: null,
     axes: { x: null, real: null, imag: null },
     animationId: null,
+    updateGraph: null, // 그래프 업데이트 함수 저장소
   });
 
-  // 애니메이션 상태 (React State와 분리하여 프레임 단위 제어)
+  // 애니메이션 상태
   const animState = useRef({
     currentT: 0, // 0(2D) ~ 1(3D)
     targetT: 0,
-    time: 0,     // 숨쉬기 효과용 시간
+    time: 0,
   });
 
-  // 1. 초기화 및 애니메이션 루프 (한 번만 실행)
+  // 1. 초기화 및 애니메이션 루프
   useEffect(() => {
     if (!mountRef.current) return;
 
@@ -75,7 +76,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 고해상도 지원
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mountRef.current.appendChild(renderer.domElement);
 
     // Lights
@@ -89,14 +90,14 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     gridHelper.rotation.x = Math.PI / 2;
     scene.add(gridHelper);
 
-    // Main Line (미리 버퍼 생성)
+    // Main Line
     const maxPoints = 2000;
     const lineGeo = new THREE.BufferGeometry();
     const positions = new Float32Array(maxPoints * 3);
     lineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const lineMat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 2 });
     const mainLine = new THREE.Line(lineGeo, lineMat);
-    lineGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 100); // 컬링 방지
+    lineGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 100);
     scene.add(mainLine);
 
     // Spheres Pool
@@ -110,7 +111,7 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       spheres.push(mesh);
     }
 
-    // Axes helper function
+    // Axes
     const createAxis = (color) => {
       const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
       const mat = new THREE.LineBasicMaterial({ color });
@@ -125,12 +126,11 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       imag: createAxis(0xef4444),
     };
 
-    // Refs 저장
     sceneRefs.current = {
-      scene, camera, renderer, mainLine, spheres, gridHelper, axes, animationId: null
+      scene, camera, renderer, mainLine, spheres, gridHelper, axes, animationId: null, updateGraph: null
     };
 
-    // --- Custom Controls Variables ---
+    // Controls Vars
     let isDragging = false;
     let prevMouse = { x: 0, y: 0 };
     const canvas = renderer.domElement;
@@ -142,29 +142,32 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       const state = animState.current;
       const refs = sceneRefs.current;
       
-      // 1. Animation Logic (Lerp)
+      // 1. Animation Logic
       state.currentT += (state.targetT - state.currentT) * 0.1;
       if (Math.abs(state.targetT - state.currentT) < 0.001) state.currentT = state.targetT;
       const t = state.currentT;
 
-      // 2. Camera Update
+      // 2. Call Graph Update (이 부분이 빠져있었습니다!)
+      if (refs.updateGraph) {
+        refs.updateGraph();
+      }
+
+      // 3. Camera Update
       const startPos = new THREE.Vector3(0, 0, 25);
-      const endPos = new THREE.Vector3(10.14, 20.48, 10.14); // 55도 뷰
+      const endPos = new THREE.Vector3(10.14, 20.48, 10.14); // 55도
       const targetPos = new THREE.Vector3().lerpVectors(startPos, endPos, t);
       
-      // 드래그 중이 아니고, 애니메이션이 진행 중일 때만 카메라 자동 이동
       if (!isDragging && Math.abs(state.targetT - state.currentT) > 0.01) {
         refs.camera.position.copy(targetPos);
         refs.camera.lookAt(0, 0, 0);
       }
 
-      // 3. Grid Update
+      // 4. Grid Update
       refs.gridHelper.rotation.x = THREE.MathUtils.lerp(Math.PI / 2, 0, t);
-      // 미세한 숨쉬기 효과 (루프가 돌고 있음을 확인용)
       state.time += 0.02;
       refs.gridHelper.position.y = Math.sin(state.time) * 0.05;
 
-      // 4. Update Axes
+      // 5. Update Axes
       const range = 15;
       const xGeo = refs.axes.x.geometry;
       xGeo.setFromPoints([new THREE.Vector3(-range, 0, 0), new THREE.Vector3(range, 0, 0)]);
@@ -181,12 +184,12 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
         new THREE.Vector3(0, range * t, 0)
       ]);
 
-      // 5. Render
+      // 6. Render
       refs.renderer.render(refs.scene, refs.camera);
     };
     animate();
 
-    // --- Event Listeners ---
+    // Event Listeners
     const handleResize = () => {
       if (!mountRef.current) return;
       const w = mountRef.current.clientWidth;
@@ -201,7 +204,6 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     const onPointerUp = () => { isDragging = false; };
     const onPointerMove = (e) => {
       if (!isDragging) return;
-      // 애니메이션 중일때는 제어 막기 (충돌 방지)
       if (Math.abs(state.targetT - state.currentT) > 0.1) return;
 
       const deltaX = e.clientX - prevMouse.x;
@@ -233,7 +235,6 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     window.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
-    // 강제 리사이즈 트리거 (초기 렌더링 보정)
     handleResize();
 
     return () => {
@@ -250,15 +251,14 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     };
   }, []);
 
-  // 2. 입력 및 모드 변경 감지 -> 즉시 그래프 업데이트
+  // 2. 입력 및 모드 변경 감지
   useEffect(() => {
     const refs = sceneRefs.current;
-    if (!refs.mainLine) return; // 아직 초기화 안됨
+    if (!refs.mainLine) return;
 
-    // 타겟 모드 설정
     animState.current.targetT = is3DMode ? 1 : 0;
 
-    // 그래프 포인트 계산
+    // 그래프 포인트 미리 계산
     const points = [];
     const range = 10;
     const step = 0.1;
@@ -266,7 +266,6 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
     for (let x = -range; x <= range; x += step) {
       let real = 0;
       let imag = 0;
-
       if (gExp) {
         const val = evaluateFunction(gExp, x);
         if (!isNaN(val)) real = val;
@@ -278,10 +277,10 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       points.push({ x, real, imag });
     }
 
-    // 버퍼 지오메트리 업데이트 함수 정의 (매번 호출됨)
+    // 매 프레임 호출될 업데이트 함수 정의
     const updateGeometry = () => {
       const positions = refs.mainLine.geometry.attributes.position.array;
-      const t = animState.current.currentT; // 현재 애니메이션 상태 반영
+      const t = animState.current.currentT; // 현재 애니메이션 진행도 사용
 
       // 색상 업데이트
       const color2D = new THREE.Color(0x10b981);
@@ -293,7 +292,9 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       let ptIndex = 0;
       points.forEach((pt, i) => {
         const x = pt.x;
+        // y: real -> imag 로 변환
         const y = (1 - t) * pt.real + t * pt.imag;
+        // z: 0 -> real 로 변환 (실수축이 바닥으로 누움)
         const z = (1 - t) * 0 + t * pt.real;
 
         positions[ptIndex++] = x;
@@ -319,46 +320,16 @@ const ThreeCanvas = ({ gExp, qExp, is3DMode }) => {
       }
     };
 
-    // 애니메이션 루프 내에서 호출되도록 Hook
-    // (이전 코드의 dataCache 방식 대신, 매 프레임 updateGeometry를 호출하도록 애니메이션 루프 수정 필요)
-    // 하지만 더 간단하게: requestAnimationFrame 루프가 이 로직을 실행하도록 수정해야 함.
-    // 여기서는 sceneRefs에 'updateGraph' 함수를 저장해두고 animate에서 호출하는 방식 사용
-    
+    // 업데이트 함수 등록 (animate 루프에서 호출됨)
     sceneRefs.current.updateGraph = updateGeometry;
     
-    // 즉시 한 번 실행 (초기화용)
+    // 초기화용 1회 실행
     updateGeometry();
 
   }, [gExp, qExp, is3DMode]);
 
-  // 3. 애니메이션 루프 보강 (updateGraph 호출 추가)
-  useEffect(() => {
-     // animate 함수를 오버라이드하거나 수정하기 어려우므로,
-     // sceneRefs.current에 저장된 콜백을 실행하도록 설계 변경이 필요함.
-     // 위 1번 useEffect의 animate 함수 내부를 수정해야 함.
-     // 하지만 1번 useEffect는 의존성이 []라 다시 정의되지 않음.
-     // 해결책: 1번 useEffect 안의 animate 함수가 sceneRefs.current.updateGraph를 확인하고 호출하도록 변경.
-     // (이미 1번 useEffect 코드를 수정하여 아래 로직을 포함시켰음)
-  }, []);
-
-  // animate 함수 수정 (1번 useEffect 내부 로직 교체용)
-  // 위 1번 useEffect의 animate 함수에 아래 한 줄을 추가해야 합니다.
-  // const animate = () => {
-  //   ...
-  //   if (sceneRefs.current.updateGraph) sceneRefs.current.updateGraph(); // <--- 이 부분!
-  //   ...
-  //   renderer.render(...)
-  // }
-  // *주의*: 위 1번 useEffect 코드를 복사할 때, animate 함수 내부에 updateGraph 호출 로직을 넣어야 합니다.
-  // 아래는 1번 useEffect를 포함한 전체 코드이므로 그대로 복사하시면 됩니다.
-
   return <div ref={mountRef} className="w-full h-full" />;
 };
-
-// -----------------------------------------------------------------------------
-// 수정된 1번 useEffect (ThreeCanvas 내부의 첫 번째 useEffect를 이걸로 교체하세요)
-// -----------------------------------------------------------------------------
-// (위 코드 블록에 이미 통합되어 있습니다. 위 코드를 전체 복사해서 사용하세요.)
 
 // -----------------------------------------------------------------------------
 // 메인 앱
